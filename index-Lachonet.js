@@ -2,7 +2,6 @@ const { Client, MessageMedia, LocalAuth } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const commander = require('commander');
 const axios = require('axios');
-const fetch = require('node-fetch');
 const fs = require('fs').promises; // Importe o módulo fs para manipulação de arquivos
 
 const HOLERITE_COMMAND = "Pedido";
@@ -42,7 +41,6 @@ const createPdf = async (cpf, numero, Nome, Endereco, pagamento) => {
   console.log(`Pagamento: ${pagamento}`);
 
   const { PDFDocument } = require('pdf-lib');
-  const path = require('path');
 
   const pdfDoc = await PDFDocument.create();
   const page = pdfDoc.addPage();
@@ -55,15 +53,9 @@ const createPdf = async (cpf, numero, Nome, Endereco, pagamento) => {
   page.drawText(`Endereço: ${Endereco}`, { x: 50, y: height - 160 });
   page.drawText(`Pagamento: ${pagamento}`, { x: 50, y: height - 180 });
 
-  const filePath = path.join(__dirname, 'output.pdf');
-
   const pdfBytes = await pdfDoc.save();
-  
-  await fs.writeFile(filePath, pdfBytes);
 
-  console.log('PDF gerado com sucesso!');
-
-  return filePath;
+  return pdfBytes;
 };
 
 const generateHolerite = async (msg, sender) => {
@@ -130,9 +122,11 @@ const baixarHolerite = async (msg, sender) => {
 
     console.log('Resultado dos dados de entrada:', cpf + numero + Nome + Endereco + pagamento);
 
-    const filePath = await createPdf(cpf, numero, Nome, Endereco, pagamento);
-    
-    await sendMediaFilepdf(sender, MediaType.PDF, filePath);
+    const pdfBytes = await createPdf(cpf, numero, Nome, Endereco, pagamento);
+    const filePath = `./${cpf}.pdf`;
+    await fs.writeFile(filePath, pdfBytes);
+
+    await sendMediaFile(sender, MediaType.PDF, filePath);
 
     await client.sendMessage(sender, `Seu pedido foi registrado com sucesso!`);
 
@@ -152,11 +146,12 @@ const mudarSenha = async (msg, sender) => {
   }
 };
 
-const sendMediaFilepdf = async (sender, type, filePath) => {
+const sendMediaFile = async (sender, type, filePath) => {
   if (type.contentType === MediaType.PDF.contentType) {
     try {
       const data = await fs.readFile(filePath);
-      const media = new MessageMedia(type.contentType, data, type.fileName);
+      const base64Data = data.toString('base64'); // Converta os dados para base64
+      const media = new MessageMedia(type.contentType, base64Data, type.fileName);
       await client.sendMessage(sender, media);
     } catch (error) {
       console.error("Error reading file:", error);
@@ -165,6 +160,7 @@ const sendMediaFilepdf = async (sender, type, filePath) => {
     console.error("Unsupported media type");
   }
 };
+
 
 const requestInput = async (client, user, prompt) => {
   await client.sendMessage(user, prompt);
